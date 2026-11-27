@@ -10,6 +10,8 @@ Use `dotagents` to keep multi-agent instructions and MCP configs synchronized wi
 ## Commands
 
 ```bash
+dotagents unify
+dotagents unify --auto
 dotagents init
 dotagents import
 dotagents generate

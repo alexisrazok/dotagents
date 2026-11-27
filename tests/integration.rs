@@ -1,13 +1,17 @@
 #[path = "../src/compiler.rs"]
 mod compiler;
+#[path = "../src/unify.rs"]
+mod unify;
 
 use compiler::{
     check_drift, compile_targets, import_existing, init_workspace, sanitize_rule_name,
     write_generated, ALL_TARGETS,
 };
 use std::fs;
+use std::io::Cursor;
 use std::path::PathBuf;
 use tempfile::TempDir;
+use unify::run_unify;
 
 #[test]
 fn init_generate_and_drift_check() {
@@ -72,4 +76,57 @@ fn sanitizes_rule_names() {
     assert_eq!(sanitize_rule_name("my-rule_1").unwrap(), "my-rule_1");
     assert_eq!(sanitize_rule_name("../evil").unwrap(), "evil");
     assert!(sanitize_rule_name("...").is_err());
+}
+
+#[test]
+fn unify_deduplicates_resolves_conflicts_merges_mcp_and_backs_up() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+
+    fs::write(
+        root.join("CLAUDE.md"),
+        "- Never commit .env files.\n- Always use pnpm for dependencies.\n- Only Claude special rule.\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("AGENTS.md"),
+        "- Never commit .env files.\n- Always use npm for dependencies.\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join(".mcp.json"),
+        r#"{"mcpServers":{"github":{"command":"npx","args":["-y","gh"]}}}"#,
+    )
+    .unwrap();
+    fs::create_dir_all(root.join(".cursor")).unwrap();
+    fs::write(
+        root.join(".cursor").join("mcp.json"),
+        r#"{"mcpServers":{"postgres":{"command":"npx","args":["-y","pg"]}}}"#,
+    )
+    .unwrap();
+
+    // Simulate user choosing option 1 for conflict (pnpm), and 's' (keep scoped) for unique Claude rule
+    let input = b"1\ns\n";
+    let mut reader = Cursor::new(&input[..]);
+    let mut output = Vec::new();
+    let summary = run_unify(root, false, &mut reader, &mut output).unwrap();
+
+    assert_eq!(summary.deduplicated, 1);
+    assert_eq!(summary.conflicts_resolved, 1);
+    assert_eq!(summary.mcp_merged, 2);
+    assert!(summary.backup_dir.ends_with("backup"));
+    assert!(root.join(".dotagents/backup/CLAUDE.md").is_file());
+    assert!(root.join(".dotagents/rules/unified.md").is_file());
+    assert!(root.join(".dotagents/rules/agent-claude.md").is_file());
+
+    let files =
+        compile_targets(root, &["all".to_string()], &PathBuf::from("/home/u"), false).unwrap();
+    write_generated(root, &files).unwrap();
+
+    let agents_md = fs::read_to_string(root.join("AGENTS.md")).unwrap();
+    let claude_md = fs::read_to_string(root.join("CLAUDE.md")).unwrap();
+    assert!(agents_md.contains("pnpm"));
+    assert!(!agents_md.contains("use npm"));
+    assert!(claude_md.contains("Only Claude special rule"));
+    assert!(!agents_md.contains("Only Claude special rule"));
 }

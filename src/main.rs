@@ -1,11 +1,14 @@
 mod compiler;
+mod unify;
 
 use clap::{Parser, Subcommand};
 use compiler::{
     check_drift, compile_targets, import_existing, init_workspace, write_generated, ALL_TARGETS,
 };
+use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
+use unify::run_unify;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -27,6 +30,13 @@ enum Commands {
     Init,
     /// Import existing CLAUDE.md, AGENTS.md, GEMINI.md, .cursorrules, and .mcp.json
     Import,
+    /// Interactive wizard to merge, deduplicate, and resolve conflicts across existing agent configs
+    Unify {
+        #[arg(long, default_value = "all")]
+        targets: String,
+        #[arg(long)]
+        auto: bool,
+    },
     /// Compile .dotagents/ into native files for each target agent
     Generate {
         #[arg(long, default_value = "all")]
@@ -64,6 +74,21 @@ fn run(cli: Cli) -> Result<i32, String> {
         Commands::Import => {
             let count = import_existing(&root)?;
             println!("Imported {} existing files into .dotagents/", count);
+            Ok(0)
+        }
+        Commands::Unify { targets, auto } => {
+            let stdin = io::stdin();
+            let stdout = io::stdout();
+            let mut reader = stdin.lock();
+            let mut writer = stdout.lock();
+            let summary = run_unify(&root, auto, &mut reader, &mut writer)?;
+            let tlist = parse_targets(&targets);
+            let files = compile_targets(&root, &tlist, &home, is_windows)?;
+            let written = write_generated(&root, &files)?;
+            println!(
+                "Backup guardado en: {}\nRegenerados {} archivos sincronizados.",
+                summary.backup_dir, written
+            );
             Ok(0)
         }
         Commands::Generate {

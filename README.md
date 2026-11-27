@@ -18,7 +18,12 @@ cargo install --git https://github.com/alexisrazok/dotagents
 ## Uso
 
 ```bash
-# Inicializar .dotagents/ o importar reglas existentes
+# En un proyecto existente con varios agentes desincronizados (asistente interactivo):
+dotagents unify
+# O en modo automático sin preguntas:
+dotagents unify --auto
+
+# Inicializar .dotagents/ desde cero o importar reglas existentes
 dotagents init
 dotagents import
 
