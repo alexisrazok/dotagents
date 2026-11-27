@@ -1,12 +1,17 @@
 [package]
-name = "dotagents"
+name = "dotagents-cli"
 version = "0.1.0"
 edition = "2021"
 description = "Universal compiler and syncer for AI coding agent rules, skills, and MCP configs (Claude Code, Codex, Antigravity/Gemini, Cursor, Copilot)."
 license = "Apache-2.0"
+repository = "https://github.com/alexisrazok/dotagents"
 readme = "README.md"
 keywords = ["ai", "agents", "mcp", "claude", "cursor"]
 categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "dotagents"
+path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
