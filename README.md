@@ -19,9 +19,9 @@ Compilador universal en Rust para mantener una única fuente de verdad (`.dotage
 ### Binarios precompilados (Linux, macOS, Windows)
 Descarga el binario correspondiente a tu sistema operativo desde la página de [Releases](https://github.com/alexisrazok/dotagents/releases/latest).
 
-### Desde código fuente con Cargo
+### Desde crates.io con Cargo
 ```bash
-cargo install --git https://github.com/alexisrazok/dotagents
+cargo install dotagents-cli
 ```
 
 ## Uso
