@@ -1,4 +1,5 @@
 mod compiler;
+mod sync;
 mod unify;
 
 use clap::{Parser, Subcommand};
@@ -8,6 +9,7 @@ use compiler::{
 use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
+use sync::smart_sync;
 use unify::run_unify;
 
 #[derive(Parser, Debug)]
@@ -45,6 +47,13 @@ enum Commands {
         dry_run: bool,
         #[arg(long)]
         check: bool,
+    },
+    /// Smart sync: absorbs newer direct edits (e.g. CLAUDE.md) or regenerates from .dotagents/
+    Sync {
+        #[arg(long, default_value = "all")]
+        targets: String,
+        #[arg(long)]
+        from: Option<String>,
     },
     /// Show sync/drift status of generated target files
     Status {
@@ -119,6 +128,23 @@ fn run(cli: Cli) -> Result<i32, String> {
             }
             let n = write_generated(&root, &files)?;
             println!("Generated {} files for targets: {}", n, targets);
+            Ok(0)
+        }
+        Commands::Sync { targets, from } => {
+            let tlist = parse_targets(&targets);
+            let outcome = smart_sync(&root, &tlist, &home, is_windows, from.as_deref())?;
+            match outcome.mode.as_str() {
+                "up-to-date" => println!("All agent configs are already in sync."),
+                "absorbed" => println!(
+                    "Absorbed newer edits from '{}' into .dotagents/ and synced {} files.",
+                    outcome.newest_source.unwrap_or_default(),
+                    outcome.files_written
+                ),
+                _ => println!(
+                    "Synced {} files from .dotagents/ to targets: {}",
+                    outcome.files_written, targets
+                ),
+            }
             Ok(0)
         }
         Commands::Status { targets } => {
