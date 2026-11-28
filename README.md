@@ -35,6 +35,10 @@ Descarga el binario correspondiente a tu sistema operativo desde la página de [
 ## Uso
 
 ```bash
+# Sincronización inteligente al cambiar de agente (absorbe ediciones recientes sin sobrescribirlas)
+dotagents sync
+dotagents sync --from claude
+
 # En un proyecto existente con varios agentes desincronizados:
 dotagents unify
 dotagents unify --auto

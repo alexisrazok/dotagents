@@ -1,5 +1,7 @@
 #[path = "../src/compiler.rs"]
 mod compiler;
+#[path = "../src/sync.rs"]
+mod sync;
 #[path = "../src/unify.rs"]
 mod unify;
 
@@ -10,6 +12,9 @@ use compiler::{
 use std::fs;
 use std::io::Cursor;
 use std::path::PathBuf;
+use std::thread;
+use std::time::Duration;
+use sync::smart_sync;
 use tempfile::TempDir;
 use unify::run_unify;
 
@@ -129,4 +134,39 @@ fn unify_deduplicates_resolves_conflicts_merges_mcp_and_backs_up() {
     assert!(!agents_md.contains("use npm"));
     assert!(claude_md.contains("Only Claude special rule"));
     assert!(!agents_md.contains("Only Claude special rule"));
+}
+
+#[test]
+fn smart_sync_absorbs_newer_direct_agent_edits() {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    let home = PathBuf::from("/home/u");
+    let targets = vec!["all".to_string()];
+
+    init_workspace(root).unwrap();
+    let files = compile_targets(root, &targets, &home, false).unwrap();
+    write_generated(root, &files).unwrap();
+
+    // Up-to-date check
+    let o1 = smart_sync(root, &targets, &home, false, None).unwrap();
+    assert_eq!(o1.mode, "up-to-date");
+
+    // Simulate Claude editing CLAUDE.md directly after .dotagents/ was created
+    thread::sleep(Duration::from_millis(50));
+    fs::write(
+        root.join("CLAUDE.md"),
+        "- Keep functions small and well-tested.\n- Always run cargo clippy before finishing.\n",
+    )
+    .unwrap();
+
+    let o2 = smart_sync(root, &targets, &home, false, None).unwrap();
+    assert_eq!(o2.mode, "absorbed");
+    assert_eq!(o2.newest_source.as_deref(), Some("CLAUDE.md"));
+    assert!(o2.files_written > 0);
+
+    // Verify GEMINI.md and AGENTS.md received the new rule
+    let gemini = fs::read_to_string(root.join("GEMINI.md")).unwrap();
+    let agents = fs::read_to_string(root.join("AGENTS.md")).unwrap();
+    assert!(gemini.contains("Always run cargo clippy before finishing."));
+    assert!(agents.contains("Always run cargo clippy before finishing."));
 }
